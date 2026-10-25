@@ -6,7 +6,7 @@ An animated theme for [Omarchy](https://omarchy.org). Dusk over the mesas: a rad
 > Install that plugin too (below) to make the wallpaper move and to get the
 > **Topside Outpost Lite** version. Without it the theme still works, with a still wallpaper.
 
-![Topside Outpost](preview.jpg)
+![Topside Outpost, moving](media/topside-outpost.webp)
 
 ## Install
 
@@ -30,6 +30,13 @@ parts moving, which uses the least power. Without the plugin you get the theme
 with a still wallpaper.
 
 Update with `omarchy theme update` and `omarchy plugin update`.
+
+## Topside Outpost Lite
+
+The same scene, still, with only its small details alive. It uses the least power,
+which makes it good for battery or a calmer desktop:
+
+![Topside Outpost Lite](media/topside-outpost-lite.webp)
 
 ## How it moves
 

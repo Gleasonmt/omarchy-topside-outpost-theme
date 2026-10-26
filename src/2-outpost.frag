@@ -1,6 +1,6 @@
 // Topside: Outpost. Dusk over layered mesas. A lattice radio mast blinks red
 // on the near ridge, a drone hovers and sweeps the valley with its light, a
-// raider in a long coat watches from the rocks, and a convoy's lights crawl
+// scout in a long coat watches from the rocks, and a convoy's lights crawl
 // across the valley floor while the first stars come out.
 // still: 37
 // detail: .37 .03 .63 .29      the mast's warning light and its glow
@@ -30,11 +30,13 @@ vec3 skyCol(vec2 p) {
     float tw = .6 + .4 * sin(ST * (.8 + st * 3.) + st * 40.);
     col += vec3(.8, .85, 1.) * smoothstep(.3, 0., length(fract(sp) - .5)) * tw * smoothstep(.12, .4, h) * (st - .988) * 50.;
   }
-  // thin high clouds catching the last light
-  vec2 q = p * vec2(1.2, 9.) + vec2(ST * .02, 0.);
-  float c = fbm(q + fbm(q * 2.1) * .6);
+  // thin high clouds catching the last light (only inside their band)
   float band = smoothstep(.08, .2, h) * smoothstep(.45, .25, h);
-  col = mix(col, mix(srgb(vec3(.25, .14, .2)), srgb(vec3(1., .5, .4)), glow * 1.5 + .2), smoothstep(.5, .8, c) * band * .8);
+  if (band > 0.) {
+    vec2 q = p * vec2(1.2, 9.) + vec2(ST * .02, 0.);
+    float c = fbm(q + fbm(q * 2.1) * .6);
+    col = mix(col, mix(srgb(vec3(.25, .14, .2)), srgb(vec3(1., .5, .4)), glow * 1.5 + .2), smoothstep(.5, .8, c) * band * .8);
+  }
   // now and then a shooting star (full motion only; it's never in the still)
   float shot = floor(ST / 23.), phase = fract(ST / 23.);
   if (hash11(shot) > .4 && phase < .05) {
@@ -120,43 +122,58 @@ float raider(vec2 p, vec2 at, float s, out float coat) {
 
 void main() {
   vec2 p = sceneP();
-  vec3 col = skyCol(p);
   float glowX = exp(-abs(p.x - SUNSET.x) * 1.5);
+  // the near ridge the outpost stands on (worked out first: where it's
+  // solid, the sky, mesas and convoy behind it can't show, so skip them)
+  float ridge = -.27 + .06 * sin(p.x * 1.6 + .8) + .04 * (fbm1(p.x * 6. + 2.) - .5) + .012 * (noise1(p.x * 60.) - .5);
+  float onRidge = fill(p.y - ridge);
+  vec3 col = vec3(0.);
+  if (onRidge < 1.) {
+  col = skyCol(p);
 
   // three ranges of mesas, each darker and less hazy
+  // (their tops stay below y .04, and a rim's glow is gone .06 above that)
   vec3 hazeCol = srgb(vec3(.62, .36, .36));
-  float m1 = mesa(p.x + 2., HORIZON, .07, .32, 1.);
+  float m1 = p.y < .1 ? mesa(p.x + 2., HORIZON, .07, .32, 1.) : -1.;
   col = mix(col, mix(hazeCol, srgb(vec3(.45, .26, .32)), .3), fill(p.y - m1));
   col += srgb(vec3(1., .5, .3)) * exp(-abs(p.y - m1) * 500.) * .25 * glowX;   // lit rims
-  float m2 = mesa(p.x + 7., HORIZON - .05, .11, .45, 4.);
+  float m2 = p.y < .1 ? mesa(p.x + 7., HORIZON - .05, .11, .45, 4.) : -1.;
   col = mix(col, srgb(vec3(.22, .13, .17)), fill(p.y - m2));
   col += srgb(vec3(1., .45, .25)) * exp(-abs(p.y - m2) * 600.) * .35 * glowX;
   // haze pooled in the valley
   col = mix(col, hazeCol * .8, (1. - smoothstep(HORIZON - .14, HORIZON - .02, p.y)) * .25 * (1. - fill(p.y - m2)));
 
   // the convoy: a short string of headlights crawling along the valley
+  // (their glow is gone .15 from the lights)
   float cx = mod(ST * .016, 2.6) - 1.3;
-  for (int i = 0; i < 4; i++) {
-    vec2 lp = vec2(cx - float(i) * .018, HORIZON - .115 + .004 * sin(cx * 9. + float(i)));
-    float d = length((p - lp) * vec2(1., 1.6));
-    col += srgb(vec3(1., .85, .6)) * (exp(-d * 1400.) * 2.2 + exp(-d * 200.) * .2);
+  if (abs(p.y - (HORIZON - .115)) < .1 && p.x > cx - .21 && p.x < cx + .15) {
+    for (int i = 0; i < 4; i++) {
+      vec2 lp = vec2(cx - float(i) * .018, HORIZON - .115 + .004 * sin(cx * 9. + float(i)));
+      float d = length((p - lp) * vec2(1., 1.6));
+      col += srgb(vec3(1., .85, .6)) * (exp(-d * 1400.) * 2.2 + exp(-d * 200.) * .2);
+    }
   }
 
-  float m3 = mesa(p.x - 3., HORIZON - .12, .12, .6, 9.);
+  float m3 = p.y < .05 ? mesa(p.x - 3., HORIZON - .12, .12, .6, 9.) : -1.;   // (tops below y -.02)
   col = mix(col, srgb(vec3(.08, .05, .07)), fill(p.y - m3));
+  }   // (behind the ridge)
 
-  // the near ridge the outpost stands on
-  float ridge = -.27 + .06 * sin(p.x * 1.6 + .8) + .04 * (fbm1(p.x * 6. + 2.) - .5) + .012 * (noise1(p.x * 60.) - .5);
-  float onRidge = fill(p.y - ridge);
-  vec3 rock = mix(srgb(vec3(.05, .03, .035)), srgb(vec3(.09, .05, .05)), fbm(p * vec2(20., 40.)));
-  rock += srgb(vec3(1., .45, .25)) * exp(-max(ridge - p.y, 0.) * 160.) * .07 * (1. - smoothstep(-.6, .3, p.x));
-  col = mix(col, rock, onRidge);
+  if (onRidge > 0.) {
+    vec3 rock = mix(srgb(vec3(.05, .03, .035)), srgb(vec3(.09, .05, .05)), fbm(p * vec2(20., 40.)));
+    rock += srgb(vec3(1., .45, .25)) * exp(-max(ridge - p.y, 0.) * 160.) * .07 * (1. - smoothstep(-.6, .3, p.x));
+    col = mix(col, rock, onRidge);
+  }
 
   // the mast on the ridge, right of centre
   float mx = .5;
   vec2 light;
-  float md = mast(p, vec2(mx, -.27 + .06 * sin(mx * 1.6 + .8) + .04 * (fbm1(mx * 6. + 2.) - .5) - .005), .36, light);
-  col = mix(col, srgb(vec3(.03, .02, .025)), fill(md));
+  vec2 mBase = vec2(mx, -.27 + .06 * sin(mx * 1.6 + .8) + .04 * (fbm1(mx * 6. + 2.) - .5) - .005);
+  light = mBase + vec2(0, .36 + .012);
+  // (its guy wires reach .09 to either side)
+  if (abs(p.x - mx) < .11 && p.y > mBase.y - .03 && p.y < light.y + .03) {
+    float md = mast(p, mBase, .36, light);
+    col = mix(col, srgb(vec3(.03, .02, .025)), fill(md));
+  }
   float blink = step(.5, fract(time * .5)) * smoothstep(1., .9, fract(time * .5));
   float ld = length(p - light);
   // (its glow fades out well inside its Details patch, so blinking off
@@ -167,9 +184,12 @@ void main() {
   // the drone, drifting about the mast and sweeping the valley with a beam
   // the drone ranges over the valley (full motion); in Lite it holds and bobs
   vec2 dpos = vec2(.18 + .26 * sin(ST * .13) + .03 * sin(ST * .41), .11 + .05 * sin(ST * .23)) + vec2(.003 * sin(time * .7), .006 * sin(time * 1.9));
-  vec2 lamp;
-  float dd = drone(p, dpos, lamp);
-  col = mix(col, srgb(vec3(.02, .015, .02)), fill(dd));
+  vec2 lamp = dpos + vec2(0, -.006);
+  // (the drone is under .04 across, even tilted)
+  if (abs(p.x - dpos.x) < .05 && abs(p.y - dpos.y) < .03) {
+    float dd = drone(p, dpos, lamp);
+    col = mix(col, srgb(vec3(.02, .015, .02)), fill(dd));
+  }
   float scanning = smoothstep(.3, .5, sin(time * .11)) ;
   // the beam sweeps the valley; in Lite a narrower sweep that stays inside
   // its patch
@@ -177,19 +197,24 @@ void main() {
   vec2 v = p - lamp;
   float cone = smoothstep(.07, .0, abs(atan(v.y, v.x) - ang)) * smoothstep(.0, .02, length(v)) * exp(-length(v) * 2.6) * step(v.y, 0.);
   cone *= smoothstep(ridge - .03, ridge + .01, p.y);   // it ends where it meets the ground
-  col += SIGNAL * cone * scanning * .35 * (.6 + .4 * fbm(p * 18. + time * .1));
+  // (its flicker only where the beam is)
+  if (cone * scanning > 0.) col += SIGNAL * cone * scanning * .35 * (.6 + .4 * fbm(p * 18. + time * .1));
   float dl = length(p - lamp - vec2(.0, -.001));
   col += vec3(.3, 1., .5) * (step(.85, fract(time * .8)) * exp(-dl * 300.) * 1.2 + exp(-dl * 900.) * .5);
 
   // the raider on the rocks, left of centre
   float rx = -.2;
-  float coat;
-  vec2 rAt = vec2(rx, -.27 + .06 * sin(rx * 1.6 + .8) + .04 * (fbm1(rx * 6. + 2.) - .5) - .006);
-  float rr = raider(p, rAt, .16, coat);
-  col = mix(col, srgb(vec3(.02, .012, .015)), fill(rr));
-  // rim of warm light on the edge facing the sunset (left)
-  float inner = raider(p - vec2(.0016, .0006), rAt, .16, coat);
-  col += srgb(vec3(1., .5, .25)) * fill(rr) * (1. - fill(inner)) * .35;
+  // (the figure, coat and rifle stay within .05 of rx and .17 above its feet,
+  // which sit within .03 of y -.25)
+  if (abs(p.x - rx) < .07 && p.y > -.3 && p.y < -.04) {
+    float coat;
+    vec2 rAt = vec2(rx, -.27 + .06 * sin(rx * 1.6 + .8) + .04 * (fbm1(rx * 6. + 2.) - .5) - .006);
+    float rr = raider(p, rAt, .16, coat);
+    col = mix(col, srgb(vec3(.02, .012, .015)), fill(rr));
+    // rim of warm light on the edge facing the sunset (left)
+    float inner = raider(p - vec2(.0016, .0006), rAt, .16, coat);
+    col += srgb(vec3(1., .5, .25)) * fill(rr) * (1. - fill(inner)) * .35;
+  }
 
   // dust drifting through the evening air
   for (int i = 0; i < 2; i++) {
